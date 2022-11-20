@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+const fs = require('fs')
+const path = require('path')
+const standardPackageJson = require('../package.json')
+
+if (!fs.existsSync(path.join(__dirname, '../src/cli/utils.js'))) {
+    // FOR LOCAL DEVELOPMENT ONLY
+    // The packaged version will have the compiled `cli/utils.js`
+    try {
+        require('ts-node').register({ transpileOnly: true })
+    } catch (err) {
+        console.error(err)
+        process.exit(0)
+    }
+}
+
+const { exec } = require('../src/cli/utils')
+
+const root = process.env.INIT_CWD || process.cwd()
+
+const addedIgnorePatterns = [
+    {
+        pattern: '.eslintcache',
+        insertLocations: ['.scannerwork', '.webpack', 'package-lock.json', 'yarn.lock'],
+    },
+]
+async function updateGitIgnore() {
+    const ignoreFile = path.join(root, '.gitignore')
+    if (fs.existsSync(ignoreFile)) {
+        const gitignore = await fs.promises.readFile(ignoreFile, 'utf-8')
+        const lines = gitignore.split('\n')
+
+        let updated = false
+        for (const { pattern, insertLocations } of addedIgnorePatterns) {
+            if (lines.includes(pattern)) {
+                continue
+            }
+
+            const location = insertLocations.find((loc) => lines.includes(loc))
+            let idx = -1
+            if (location !== undefined) {
+                idx = lines.findIndex((line) => line === location)
+            }
+            if (idx > 0) {
+                lines.splice(idx + 1, 0, pattern)
+                console.log(`inserted ${pattern} after ${location} in your .gitignore`)
+            } else {
+                lines.push(pattern)
+                console.log(`appended ${pattern} to your .gitignore`)
+            }
+            updated = true
+        }
+        if (!/^\r?$/.test(lines[lines.length - 1])) {
+            lines.push('')
+            console.log(`appended an empty line to your .gitignore`)
+            updated = true
+        }
+        if (updated) {
+            await fs.promises.writeFile(ignoreFile, lines.join('\n'), 'utf-8')
+            console.log('saved updated .gitignore')
+        }
+    } else {
+        console.log('.gitignore does not exist, not updating')
+    }
+}
+
+const updatableScripts = [
+    // 'build',
+    // 'test',
+    'test:coverage',
+    'fix',
+    'lint',
+    'format',
+    // 'release',
+    // 'release:dry',
+    'check:types',
+]
+async function updatePackageJson() {
+    const packageJsonFile = path.join(root, 'package.json')
+    const packageJson = require(packageJsonFile)
+    let updated = false
+
+    // leave the package.json alone if explicitly requested
+    if (packageJson.preventScriptUpdates) {
+        console.warn('WARNING: I hope you know what you are doing, make sure you have these scripts:' , updatableScripts)
+        return        
+    }
+
+    if (!packageJson.scripts) {
+        packageJson.scripts = {
+            ...standardPackageJson.scripts,
+            postinstall: undefined,
+        }
+    }
+    for (const scriptName of updatableScripts) {
+        if (
+            packageJson.scripts &&
+            packageJson.scripts[scriptName] !== standardPackageJson.scripts[scriptName]
+        ) {
+            updated = true
+            console.log([
+                `overwriting package.json script for: ${scriptName}`,
+                `    old script: ${packageJson.scripts[scriptName]}`,
+                `    new script: ${standardPackageJson.scripts[scriptName]}`,
+            ])
+            packageJson.scripts[scriptName] = standardPackageJson.scripts[scriptName]
+        }
+    }
+    if (updated) {
+        console.log('overwriting package.json. make sure to check the changes before you commit!')
+        await fs.promises.writeFile(packageJsonFile, JSON.stringify(packageJson, null, 2), 'utf-8')
+        await exec('npx', ['prettier', '--write', 'package.json'], { cwd: root })
+    }
+}
+
+async function updatePrettierIgnore() {
+    const prettierIgnoreFile = path.join(root, '.prettierignore')
+    if (!fs.existsSync(prettierIgnoreFile)) {
+        await fs.promises.writeFile(
+            prettierIgnoreFile,
+            await fs.promises.readFile(path.join(__dirname, '../.prettierignore'))
+        )
+    }
+}
+
+async function main() {
+    await Promise.all([updateGitIgnore(), updatePackageJson(), updatePrettierIgnore()])
+}
+
+if (!process.env.CI_JOB_ID) {
+    main().catch((err) => {
+        console.error(err)
+        process.exit(1)
+    })
+}

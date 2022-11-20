@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/.*.ts",
+    "test/**/*.ts",
+    "test/**/.*.ts",
+    "typings/**/*.ts",
+    "typings/**/.*.ts",
+    "*.js",
+    ".*.js",
+    "*.json",
+    ".*.json",
+    "*.ts"
+  ],
+  "compilerOptions": {
+    "typeRoots": ["./typings", "./node_modules/@types"],
+    "rootDir": "."
+  }
+}
