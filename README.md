@@ -3,8 +3,6 @@
 This package contains reusable configurations, that can easily be included in every type of Javascript/Typescript project.     
 It can also be used to bootstrap the initial configuration for a new package.
 
-[[_TOC_]]
-
 ## How it works
 
 In order to install the package in your project, the package manager needs to fetch typescript-project-bootstrap package from npm registry.
